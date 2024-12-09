@@ -8,16 +8,20 @@ import torch
 
 from depth_anything_v2.dpt import DepthAnythingV2
 
+def count_parameters(model, include_all=False):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad or include_all)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Depth Anything V2 Metric Depth Estimation')
     
-    parser.add_argument('--img-path', type=str)
+    parser.add_argument('--img-path', type=str,default="/home/chenwu/Depth-Anything-V2/250.png")
     parser.add_argument('--input-size', type=int, default=518)
     parser.add_argument('--outdir', type=str, default='./vis_depth')
     
-    parser.add_argument('--encoder', type=str, default='vitl', choices=['vits', 'vitb', 'vitl', 'vitg'])
-    parser.add_argument('--load-from', type=str, default='checkpoints/depth_anything_v2_metric_hypersim_vitl.pth')
+    # parser.add_argument('--encoder', type=str, default='vitl', choices=['vits', 'vitb', 'vitl', 'vitg'])
+    # parser.add_argument('--load-from', type=str, default='checkpoints/depth_anything_v2_metric_hypersim_vitl.pth')
+    parser.add_argument('--encoder', type=str, default='vits', choices=['vits', 'vitb', 'vitl', 'vitg'])
+    parser.add_argument('--load-from', type=str, default='/home/chenwu/Depth-Anything-V2/checkpoints/depth_anything_v2_metric_hypersim_vits.pth')
     parser.add_argument('--max-depth', type=float, default=20)
     
     parser.add_argument('--save-numpy', dest='save_numpy', action='store_true', help='save the model raw output')
@@ -38,6 +42,13 @@ if __name__ == '__main__':
     depth_anything = DepthAnythingV2(**{**model_configs[args.encoder], 'max_depth': args.max_depth})
     depth_anything.load_state_dict(torch.load(args.load_from, map_location='cpu'))
     depth_anything = depth_anything.to(DEVICE).eval()
+
+    dinov2_params = f"{round(count_parameters(depth_anything.pretrained,True)/1e6,2)}M" # vits 24.79M
+    print(f"DINOv2 parameters : {dinov2_params}")
+    dpt_params = f"{round(count_parameters(depth_anything.depth_head,True)/1e6,2)}M" # vits 24.79M
+    print(f"DPT parameters : {dpt_params}")
+    total_params = f"{round(count_parameters(depth_anything,True)/1e6,2)}M" # vits 24.79M
+    print(f"Total parameters : {total_params}")
     
     if os.path.isfile(args.img_path):
         if args.img_path.endswith('txt'):
@@ -56,7 +67,6 @@ if __name__ == '__main__':
         print(f'Progress {k+1}/{len(filenames)}: {filename}')
         
         raw_image = cv2.imread(filename)
-        
         depth = depth_anything.infer_image(raw_image, args.input_size)
         
         if args.save_numpy:
